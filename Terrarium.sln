@@ -3,7 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Terrarium", "Terrarium\Terrarium.csproj", "{5F8C58EA-D660-43CF-86C7-1CA0A8779213}"
+
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Terrarium", "Terrarium.csproj", "{BC7CA79D-E371-4038-8902-1FB0B7ACF611}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +19,9 @@ Global
 		{5F8C58EA-D660-43CF-86C7-1CA0A8779213}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5F8C58EA-D660-43CF-86C7-1CA0A8779213}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5F8C58EA-D660-43CF-86C7-1CA0A8779213}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC7CA79D-E371-4038-8902-1FB0B7ACF611}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC7CA79D-E371-4038-8902-1FB0B7ACF611}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC7CA79D-E371-4038-8902-1FB0B7ACF611}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC7CA79D-E371-4038-8902-1FB0B7ACF611}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

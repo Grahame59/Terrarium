@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "dgSpecHash": "qSQi1ReFyyKNgrkZsVsa4HzvQDcnlZOi2h5DCZZSYLfYVwbXAjQTE16hgLOGW0TBb27hGkfjVPL4cjNg++J4kA==",
+  "success": true,
+  "projectFilePath": "/Users/kylergrahame/Desktop/CODES/Terrarium/Terrarium.csproj",
+  "expectedPackageFiles": [
+    "/Users/kylergrahame/.nuget/packages/csfml/2.5.2/csfml.2.5.2.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/sfml.audio/2.5.1/sfml.audio.2.5.1.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/sfml.graphics/2.5.1/sfml.graphics.2.5.1.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/sfml.net/2.5.1/sfml.net.2.5.1.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/sfml.system/2.5.1/sfml.system.2.5.1.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/sfml.window/2.5.1/sfml.window.2.5.1.nupkg.sha512"
+  ],
+  "logs": []
+}
