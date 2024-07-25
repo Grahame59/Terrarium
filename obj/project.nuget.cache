@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "qSQi1ReFyyKNgrkZsVsa4HzvQDcnlZOi2h5DCZZSYLfYVwbXAjQTE16hgLOGW0TBb27hGkfjVPL4cjNg++J4kA==",
+  "dgSpecHash": "TT55Xqj4kLRJ9TfBenRu911xDAQJB+Dqye7xSOHk1gaDKuWlbpugadRytus+G0g34IORiGUF6vpW/XsE8HVtIA==",
   "success": true,
   "projectFilePath": "/Users/kylergrahame/Desktop/CODES/Terrarium/Terrarium.csproj",
   "expectedPackageFiles": [
@@ -9,7 +9,10 @@
     "/Users/kylergrahame/.nuget/packages/sfml.graphics/2.5.1/sfml.graphics.2.5.1.nupkg.sha512",
     "/Users/kylergrahame/.nuget/packages/sfml.net/2.5.1/sfml.net.2.5.1.nupkg.sha512",
     "/Users/kylergrahame/.nuget/packages/sfml.system/2.5.1/sfml.system.2.5.1.nupkg.sha512",
-    "/Users/kylergrahame/.nuget/packages/sfml.window/2.5.1/sfml.window.2.5.1.nupkg.sha512"
+    "/Users/kylergrahame/.nuget/packages/sfml.window/2.5.1/sfml.window.2.5.1.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/microsoft.netcore.app.ref/3.1.0/microsoft.netcore.app.ref.3.1.0.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/microsoft.aspnetcore.app.ref/3.1.10/microsoft.aspnetcore.app.ref.3.1.10.nupkg.sha512",
+    "/Users/kylergrahame/.nuget/packages/microsoft.netcore.app.host.osx-x64/3.1.32/microsoft.netcore.app.host.osx-x64.3.1.32.nupkg.sha512"
   ],
   "logs": []
 }

@@ -1,32 +1,28 @@
-﻿using System;
-using SFML.Graphics;
+﻿using SFML.Graphics;
 using SFML.System;
 using SFML.Window;
+using Terrarium.GameBox.Systems;
 
 namespace Terrarium
 {
-    class Program
+    public static class Program
     {
-        static void Main(string[] args)
+        public static void Main()
         {
-            // Create the main window
-            RenderWindow window = new RenderWindow(new VideoMode(800, 600), "SFML Window");
-
-            // Set the frame rate limit to 60 FPS
+            RenderWindow window = new RenderWindow(new VideoMode(800, 600), "Terrarium");
             window.SetFramerateLimit(60);
 
-            // Main game loop
+            TerrainGeneration terrain = new TerrainGeneration(window);
+
+            window.Closed += (sender, e) => window.Close();
+
             while (window.IsOpen)
             {
-                // Process events
                 window.DispatchEvents();
+                window.Clear();
 
-                // Clear the window
-                window.Clear(Color.Black);
+                terrain.Render();
 
-                // Draw your game entities here
-
-                // Display everything drawn to the window
                 window.Display();
             }
         }
