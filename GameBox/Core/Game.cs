@@ -46,7 +46,7 @@ namespace Terrarium
         {
             //Game game = new Game();
             //game.Run();
-            ErrorLogger.SendTestError("TEST TERRARIUM");
+            ErrorLogger.SendError("TEST TERRARIUM", "Game.cs(Terrarium Project)", "NetworkListener");
 
         }
     }

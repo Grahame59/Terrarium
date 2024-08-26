@@ -18,7 +18,7 @@ namespace Terrarium
             if (_permutation.Length != 256)
             {
                 throw new InvalidOperationException("Permutation array must have exactly 256 elements.");
-            }
+            } 
             
             // Populate _p array with the permutation values, repeated twice
             _p = new int[512];
