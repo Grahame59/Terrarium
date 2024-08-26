@@ -2,6 +2,7 @@ using SFML.Graphics;
 using SFML.System;
 using SFML.Window;
 using Terrarium.GameBox.Systems;
+using Error;
 
 namespace Terrarium
 {
@@ -43,8 +44,10 @@ namespace Terrarium
 
         public static void Main()
         {
-            Game game = new Game();
-            game.Run();
+            //Game game = new Game();
+            //game.Run();
+            ErrorLogger.SendTestError("TEST TERRARIUM");
+
         }
     }
 }
