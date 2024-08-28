@@ -1,53 +1,86 @@
-using SFML.Graphics;
-using SFML.System;
-using SFML.Window;
-using Terrarium.GameBox.Systems;
+using OpenTK.Windowing.Desktop;
+using OpenTK.Windowing.Common;
+using OpenTK.Graphics.OpenGL4;
+using OpenTK.Mathematics;
+using System;
 using Error;
 
 namespace Terrarium
 {
-    public class Game
+    public class Game : GameWindow
     {
-        private RenderWindow _window;
-        private TerrainGeneration _terrainGenerator;
 
-        public Game()
+        private ShaderProgram _shaderProgram;
+        private int _vertexArrayId;
+        private int _vertexBufferId;
+        private TerrainGeneration _terrainGeneration;
+
+        public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings)
+            : base(gameWindowSettings, nativeWindowSettings)
         {
-            _window = new RenderWindow(new VideoMode(800, 600), "Terrarium");
-            _window.SetFramerateLimit(60);
-            _window.Closed += (sender, e) => _window.Close();
-
-            _terrainGenerator = new TerrainGeneration(_window);
+             _terrainGeneration = new TerrainGeneration();
         }
 
-        public void Run()
+        protected override void OnLoad()
         {
-            while (_window.IsOpen)
-            {
-                _window.DispatchEvents();
-                Update();
-                Render();
-            }
+            base.OnLoad();
+            GL.ClearColor(Color4.CornflowerBlue);
+            GL.Enable(EnableCap.DepthTest);
+            
+            _shaderProgram = new ShaderProgram("vertex_shader.glsl", "fragment_shader.glsl");
+            _shaderProgram.Use();
+            
+            _vertexArrayId = GL.GenVertexArray();
+            GL.BindVertexArray(_vertexArrayId);
+            
+            _vertexBufferId = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferId);
+
+            // Generate terrain data
+            _terrainGeneration.GenerateTerrain(800, 600);
+            
+            // Upload terrain data to the GPU
+            GL.BufferData(BufferTarget.ArrayBuffer, _terrainGeneration.Vertices.Length * sizeof(float),
+                _terrainGeneration.Vertices, BufferUsageHint.StaticDraw);
         }
 
-        private void Update()
+        protected override void OnRenderFrame(FrameEventArgs args)
         {
-            _terrainGenerator.Update();
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            
+            _shaderProgram.Use();
+            GL.BindVertexArray(_vertexArrayId);
+            GL.DrawArrays(PrimitiveType.Points, 0, _terrainGeneration.Vertices.Length / 3);
+            
+            SwapBuffers();
         }
 
-        private void Render()
+        protected override void OnUpdateFrame(FrameEventArgs args)
         {
-            _window.Clear();
-            _terrainGenerator.Render();
-            _window.Display();
+            // Handle game updates (e.g., input processing, game logic)
+            base.OnUpdateFrame(args);
         }
 
+        [STAThread]
         public static void Main()
         {
-            //Game game = new Game();
-            //game.Run();
-            ErrorLogger.SendError("TEST TERRARIUM", "Game.cs(Terrarium Project)", "NetworkListener");
+            var gameWindowSettings = new GameWindowSettings()
+            {
+                // No direct equivalent for IsMultiSample; you may configure anti-aliasing in other ways if needed
+            };
 
+            var nativeWindowSettings = new NativeWindowSettings()
+            {
+                ClientSize = new Vector2i(800, 600), // Use ClientSize instead of Size
+                Title = "3D Terrain",
+                // You can configure other settings if needed
+            };
+
+            using (var game = new Game(gameWindowSettings, nativeWindowSettings))
+            {
+                ErrorLogger.SendError("Terrarium App Connected!", "Game.cs(Terrarium Project)", "NetworkListener");
+                game.Run(); // Run the game with default settings
+            }
         }
     }
 }

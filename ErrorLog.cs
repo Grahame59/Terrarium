@@ -10,20 +10,18 @@ namespace Error
 
         public static void SendError(string error, string script, string networkListener)
         {
-            // Concatenate the strings with a delimiter (e.g., '|')
-            string message = $"{error}|{script}|{networkListener}";
+             var client = new TcpClient("localhost", 5000);
+    
+            // Format the message with line breaks between each part
+            var message = $"{Environment.NewLine}Error: {error}{Environment.NewLine}Script: {script}{Environment.NewLine}Context: {networkListener}";
             
-            // Convert the concatenated message to a byte array
-            var client = new TcpClient("localhost", 5000);
             var data = Encoding.UTF8.GetBytes(message);
             
             using (var stream = client.GetStream())
             {
-                // Send the data over the network
                 stream.Write(data, 0, data.Length);
             }
             
-            // Close the client connection
             client.Close();
         }
 

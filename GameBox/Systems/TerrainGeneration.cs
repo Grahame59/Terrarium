@@ -1,46 +1,26 @@
-using SFML.Graphics;
-using SFML.System;
-using SFML.Window;
+using Terrarium;
 
-namespace Terrarium.GameBox.Systems
+public class TerrainGeneration
 {
-    public class TerrainGeneration : IRenderable, IUpdatable
+    public float[] Vertices { get; private set; }
+
+    public void GenerateTerrain(int width, int height)
     {
-        private RenderWindow _window;
-        private VertexArray _terrain;
-
-        public TerrainGeneration(RenderWindow window)
+        // Code for generating terrain vertices using Perlin noise
+        Vertices = new float[width * height * 3]; // Assuming 3 coordinates (x, y, z) per vertex
+        
+        // Example of how you might generate the vertices
+        for (int i = 0; i < width; i++)
         {
-            _window = window;
-            _terrain = new VertexArray(PrimitiveType.Points);
-            GenerateTerrain();
-        }
-
-        public void Update()
-        {
-            // Update logic if necessary
-        }
-
-        public void Render()
-        {
-            _window.Draw(_terrain);
-        }
-
-        private void GenerateTerrain()
-        {
-            int width = 800;
-            int height = 600;
-            float scale = 0.01f;
-
-            for (int y = 0; y < height; y++)
+            for (int j = 0; j < height; j++)
             {
-                for (int x = 0; x < width; x++)
-                {
-                    float noiseValue = Mathf.PerlinNoise(x * scale, y * scale);
-                    Color color = new Color((byte)(noiseValue * 255), (byte)(noiseValue * 255), (byte)(noiseValue * 255));
-
-                    _terrain.Append(new Vertex(new Vector2f(x, y), color));
-                }
+                float x = i;
+                float z = j;
+                float y = Mathf.PerlinNoise(x * 0.1f, z * 0.1f, 0) * 10; // Use Perlin noise for height
+                int index = (i * height + j) * 3;
+                Vertices[index] = x;
+                Vertices[index + 1] = y;
+                Vertices[index + 2] = z;
             }
         }
     }
