@@ -109,7 +109,11 @@ namespace Terrarium
             x2 = Lerp(u, Grad(abb, x, y - 1, z - 1), Grad(bbb, x - 1, y - 1, z - 1));
             float y2 = Lerp(v, x1, x2);
 
-            return (Lerp(w, y1, y2) + 1) / 2; // Normalize to [0, 1]
+            float results = (Lerp(w, y1, y2) + 1) / 2; // Normalize to [0, 1]
+
+            ErrorLogger.SendError($"PerlinNoise(x: {x}, y: {y}, z: {z}) = {results}", "PerlinNoise.cs (Terrarium)", "NetworkListener");
+
+            return results;
         }
 
     }

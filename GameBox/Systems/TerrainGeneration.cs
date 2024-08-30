@@ -1,3 +1,4 @@
+using Error;
 using Terrarium;
 
 public class TerrainGeneration
@@ -23,5 +24,22 @@ public class TerrainGeneration
                 Vertices[index + 2] = z;
             }
         }
+        ErrorLogger.SendError("Terrain generation completed successfully.", "TerrainGenerator.cs (Terrarium)", "NetworkListener");
+    }
+
+    // Simple square mesh (2 triangles)
+    public void GenerateSimpleMesh()
+    {
+        Vertices = new float[]
+        {
+            // Triangle 1
+            0.0f,  0.5f, 0.0f,
+        -0.5f, -0.5f, 0.0f,
+            0.5f, -0.5f, 0.0f,
+            // Triangle 2
+            0.5f, -0.5f, 0.0f,
+        -0.5f, -0.5f, 0.0f,
+        -0.5f,  0.5f, 0.0f
+        };
     }
 }

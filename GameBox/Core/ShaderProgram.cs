@@ -1,3 +1,4 @@
+using Error;
 using OpenTK.Graphics.OpenGL4;
 using System;
 using System.IO;
@@ -8,30 +9,29 @@ public class ShaderProgram
 
     public ShaderProgram(string vertexPath, string fragmentPath)
     {
-        // Load and compile shaders
         var vertexShader = LoadShader(vertexPath, ShaderType.VertexShader);
         var fragmentShader = LoadShader(fragmentPath, ShaderType.FragmentShader);
 
-        // Create and link the shader program
         _handle = GL.CreateProgram();
         GL.AttachShader(_handle, vertexShader);
         GL.AttachShader(_handle, fragmentShader);
         GL.LinkProgram(_handle);
 
-        // Check for linking errors
         GL.GetProgram(_handle, GetProgramParameterName.LinkStatus, out int linkStatus);
         if (linkStatus == 0)
         {
             var log = GL.GetProgramInfoLog(_handle);
+            ErrorLogger.SendError($"Program link error: {log}", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             throw new Exception($"Program link error: {log}");
         }
 
-        // Detach and delete shaders
         GL.DetachShader(_handle, vertexShader);
         GL.DetachShader(_handle, fragmentShader);
         GL.DeleteShader(vertexShader);
         GL.DeleteShader(fragmentShader);
     }
+
+    public int Handle => _handle; // Expose _handle via a public property
 
     public void Use()
     {
@@ -46,11 +46,11 @@ public class ShaderProgram
         GL.ShaderSource(shader, source);
         GL.CompileShader(shader);
 
-        // Check for compilation errors
         GL.GetShader(shader, ShaderParameter.CompileStatus, out int compileStatus);
         if (compileStatus == 0)
         {
             var log = GL.GetShaderInfoLog(shader);
+            ErrorLogger.SendError($"Shader compiliation error ({type}): {log}", "ShaderProgram.cs", "NetworkListener");
             throw new Exception($"Shader compilation error ({type}): {log}");
         }
 
