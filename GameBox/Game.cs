@@ -5,6 +5,8 @@ using OpenTK.Mathematics;
 using System;
 using Error;
 
+/*
+
 namespace Terrarium
 {
     public class Game : GameWindow
@@ -12,6 +14,7 @@ namespace Terrarium
         private ShaderProgram _shaderProgram;
         private int _vertexArrayId;
         private int _vertexBufferId;
+        private int _elementBufferId;
         private TerrainGeneration _terrainGeneration;
         private Camera _camera;
 
@@ -24,7 +27,7 @@ namespace Terrarium
         protected override void OnLoad()
         {
             base.OnLoad();
-            GL.ClearColor(Color4.Transparent);
+            GL.ClearColor(Color4.Black);
             GL.Enable(EnableCap.DepthTest);
 
             try
@@ -35,53 +38,124 @@ namespace Terrarium
             catch (Exception ex)
             {
                 ErrorLogger.SendError($"Shader Program Error: {ex.Message}", "Game.cs (Terrarium)", "NetworkListener");
+                return;
             }
 
-            _vertexArrayId = GL.GenVertexArray();
-            GL.BindVertexArray(_vertexArrayId);
+            _terrainGeneration.GenerateTerrain(100, 100, 1f, 10f);
 
-            _vertexBufferId = GL.GenBuffer();
-            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferId);
+            InitializeBuffers();
 
-            // Debug output for vertex attributes
-            ErrorLogger.SendError("Vertex Array and Buffer Setup Completed", "Game.cs (Terrarium)", "NetworkListener");
-
-            // Generate terrain data
-            _terrainGeneration.GenerateTerrain(5, 5); 
-
-            //_terrainGeneration.GenerateSimpleMesh(); //Test for Shaders
-
-            // Check terrain vertices
             if (_terrainGeneration.Vertices.Length == 0)
             {
                 ErrorLogger.SendError("Terrain vertices are empty!", "Game.cs (Terrarium)", "NetworkListener");
                 return;
             }
 
-            // Example for logging vertex positions
-            for (int i = 0; i < _terrainGeneration.Vertices.Length; i += 3)
+            InitializeCamera();
+
+            ErrorLogger.SendError($"Vertices Length: {_terrainGeneration.Vertices.Length}", "Game.cs (Terrarium)", "NetworkListener");
+        }
+
+        private void InitializeBuffers()
+        {
+            try
             {
-                Console.WriteLine($"Vertex {i / 3}: ({_terrainGeneration.Vertices[i]}, {_terrainGeneration.Vertices[i + 1]}, {_terrainGeneration.Vertices[i + 2]})");
+                _vertexArrayId = GL.GenVertexArray();
+                GL.BindVertexArray(_vertexArrayId);
+
+                _vertexBufferId = GL.GenBuffer();
+                GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferId);
+                GL.BufferData(BufferTarget.ArrayBuffer, _terrainGeneration.Vertices.Length * sizeof(float), _terrainGeneration.Vertices, BufferUsageHint.StaticDraw);
+                
+                // Check for errors after buffer data upload
+                ErrorCode error = GL.GetError();
+                if (error != ErrorCode.NoError)
+                {
+                    ErrorLogger.SendError($"OpenGL Error after BufferData: {error}", "Game.cs (Terrarium)", "NetworkListener");
+                }
+                
+                GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+                GL.EnableVertexAttribArray(0);
+
+                _elementBufferId = GL.GenBuffer();
+                GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferId);
+                GL.BufferData(BufferTarget.ElementArrayBuffer, _terrainGeneration.Indices.Length * sizeof(uint), _terrainGeneration.Indices, BufferUsageHint.StaticDraw);
+
+                // Check for errors after element buffer data upload
+                error = GL.GetError();
+                if (error != ErrorCode.NoError)
+                {
+                    ErrorLogger.SendError($"OpenGL Error after ElementBufferData: {error}", "Game.cs (Terrarium)", "NetworkListener");
+                }
+
+                GL.BindVertexArray(0);
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.SendError($"Buffer Initialization Error: {ex.Message}", "Game.cs (Terrarium)", "NetworkListener");
+                throw;
+            }
+        }
+
+        private void LogBufferData()
+        {
+            // Bind the vertex buffer
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferId);
+
+            // Map the buffer for reading
+            float[] bufferData = new float[_terrainGeneration.Vertices.Length];
+            GL.GetBufferSubData(BufferTarget.ArrayBuffer, IntPtr.Zero, _terrainGeneration.Vertices.Length * sizeof(float), bufferData);
+
+            // Log the buffer data
+            for (int i = 0; i < Math.Min(bufferData.Length, 30); i += 3)
+            {
+                ErrorLogger.SendError($"Buffer Data {i / 3}: ({bufferData[i]}, {bufferData[i + 1]}, {bufferData[i + 2]})", "Game.cs (Terrarium)", "NetworkListener");
+            }
+        }
+
+        protected override void OnRenderFrame(FrameEventArgs args)
+        {
+            base.OnRenderFrame(args);
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            try
+            {
+                _shaderProgram.Use();
+                GL.BindVertexArray(_vertexArrayId);
+
+                // Check for errors before drawing
+                ErrorCode error = GL.GetError();
+                if (error != ErrorCode.NoError)
+                {
+                    ErrorLogger.SendError($"OpenGL Error before DrawElements: {error}", "Game.cs (Terrarium)", "NetworkListener");
+                }
+
+                GL.DrawElements(PrimitiveType.Triangles, _terrainGeneration.Indices.Length, DrawElementsType.UnsignedInt, 0);
+
+                // Check for errors after drawing
+                error = GL.GetError();
+                if (error != ErrorCode.NoError)
+                {
+                    ErrorLogger.SendError($"OpenGL Error after DrawElements: {error}", "Game.cs (Terrarium)", "NetworkListener");
+                }
+                else
+                {
+                    ErrorLogger.SendError($"Drew {_terrainGeneration.Vertices.Length / 3} vertices", "Game.cs (Terrarium)", "NetworkListener");
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.SendError($"Rendering Error: {ex.Message}", "Game.cs (Terrarium)", "NetworkListener");
             }
 
+            SwapBuffers();
+        }
 
-            // Upload terrain data to the GPU
-            GL.BufferData(BufferTarget.ArrayBuffer, _terrainGeneration.Vertices.Length * sizeof(float),
-                _terrainGeneration.Vertices, BufferUsageHint.StaticDraw);
 
-            // Vertex data consists of 3 floats per vertex (for the x, y, z positions)
-            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
-            GL.EnableVertexAttribArray(0);
-
-            // Initialize Camera
-            _camera = new Camera(new Vector3(0, 0, 5), Vector3.Zero, Vector3.UnitY, ClientSize.X / (float)ClientSize.Y);
-
-            // Update camera matrices
+        private void InitializeCamera()
+        {
+            _camera = new Camera(new Vector3(25, 15, 25), new Vector3(25, 0, 25), Vector3.UnitY, ClientSize.X / (float)ClientSize.Y);
             UpdateCamera();
-
-            // Debug output for terrain vertices
-            ErrorLogger.SendError($"Vertices Length: {_terrainGeneration.Vertices.Length}", "Game.cs (Terrarium)", "NetworkListener");
-
         }
 
         private void UpdateCamera()
@@ -97,6 +171,7 @@ namespace Terrarium
             if (modelLoc == -1 || viewLoc == -1 || projectionLoc == -1)
             {
                 ErrorLogger.SendError("Uniform location error!", "Game.cs (Terrarium)", "NetworkListener");
+                return;
             }
 
             GL.UniformMatrix4(modelLoc, false, ref model);
@@ -104,41 +179,8 @@ namespace Terrarium
             GL.UniformMatrix4(projectionLoc, false, ref projection);
         }
 
-        protected override void OnRenderFrame(FrameEventArgs args)
-        {
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            try
-            {
-                _shaderProgram.Use();
-                GL.BindVertexArray(_vertexArrayId);
-
-                var error = GL.GetError();
-                if (error != ErrorCode.NoError)
-                {
-                    ErrorLogger.SendError($"OpenGL Error before DrawArrays: {error}", "Game.cs (Terrarium)", "NetworkListener");
-                }
-
-                GL.DrawArrays(PrimitiveType.Triangles, 0, _terrainGeneration.Vertices.Length / 3);
-
-                error = GL.GetError();
-                if (error != ErrorCode.NoError)
-                {
-                    ErrorLogger.SendError($"OpenGL Error after DrawArrays: {error}", "Game.cs (Terrarium)", "NetworkListener");
-                }
-            }
-            catch (Exception ex)
-            {
-                ErrorLogger.SendError($"Rendering Error: {ex.Message}", "Game.cs (Terrarium)", "NetworkListener");
-            }
-
-            SwapBuffers();
-        }
-
-
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
-            // Handle game updates (e.g., input processing, game logic)
             _camera.Update();
             UpdateCamera();
             base.OnUpdateFrame(args);
@@ -147,23 +189,19 @@ namespace Terrarium
         [STAThread]
         public static void Main()
         {
-            var gameWindowSettings = new GameWindowSettings()
+            var gameWindowSettings = new GameWindowSettings();
+            var nativeWindowSettings = new NativeWindowSettings
             {
-                // No direct equivalent for IsMultiSample; you may configure anti-aliasing in other ways if needed
-            };
-
-            var nativeWindowSettings = new NativeWindowSettings()
-            {
-                ClientSize = new Vector2i(800, 600), // Use ClientSize instead of Size
+                ClientSize = new Vector2i(800, 600),
                 Title = "Terrarium",
-                // You can configure other settings if needed
             };
 
             using (var game = new Game(gameWindowSettings, nativeWindowSettings))
             {
-                ErrorLogger.SendError("Terrarium App Connected!", "Game.cs(Terrarium Project)", "NetworkListener");
-                game.Run(); // Run the game with default settings
+                ErrorLogger.SendError("Terrarium App Connected!", "Game.cs (Terrarium)", "NetworkListener");
+                game.Run();
             }
-        }
-    }
+        } 
+    } 
 }
+*/

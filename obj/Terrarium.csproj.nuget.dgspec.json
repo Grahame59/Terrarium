@@ -61,6 +61,14 @@
             "SFML.Net": {
               "target": "Package",
               "version": "[2.5.1, )"
+            },
+            "SkiaSharp": {
+              "target": "Package",
+              "version": "[2.88.8, )"
+            },
+            "System.Drawing.Common": {
+              "target": "Package",
+              "version": "[8.0.8, )"
             }
           },
           "imports": [

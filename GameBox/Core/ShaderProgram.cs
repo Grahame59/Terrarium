@@ -1,14 +1,24 @@
+/*
 using Error;
 using OpenTK.Graphics.OpenGL4;
 using System;
 using System.IO;
 
-public class ShaderProgram
+public class ShaderProgram : IDisposable
 {
     private readonly int _handle;
 
     public ShaderProgram(string vertexPath, string fragmentPath)
     {
+        if (!File.Exists(vertexPath))
+        {
+            throw new FileNotFoundException("Vertex shader file not found.", vertexPath);
+        }
+        if (!File.Exists(fragmentPath))
+        {
+            throw new FileNotFoundException("Fragment shader file not found.", fragmentPath);
+        }
+
         var vertexShader = LoadShader(vertexPath, ShaderType.VertexShader);
         var fragmentShader = LoadShader(fragmentPath, ShaderType.FragmentShader);
 
@@ -43,6 +53,11 @@ public class ShaderProgram
         var shader = GL.CreateShader(type);
 
         var source = File.ReadAllText(path);
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            throw new Exception($"Shader source file is empty: {path}");
+        }
+
         GL.ShaderSource(shader, source);
         GL.CompileShader(shader);
 
@@ -50,10 +65,23 @@ public class ShaderProgram
         if (compileStatus == 0)
         {
             var log = GL.GetShaderInfoLog(shader);
-            ErrorLogger.SendError($"Shader compiliation error ({type}): {log}", "ShaderProgram.cs", "NetworkListener");
+            ErrorLogger.SendError($"Shader compilation error ({type}): {log}", "ShaderProgram.cs", "NetworkListener");
+            ErrorLogger.SendError($"Shader source: {source}", "ShaderProgram.cs", "NetworkListener");
             throw new Exception($"Shader compilation error ({type}): {log}");
         }
 
         return shader;
     }
+
+    public void Dispose()
+    {
+        GL.DeleteProgram(_handle);
+        GC.SuppressFinalize(this);
+    }
+
+    ~ShaderProgram()
+    {
+        Dispose();
+    }
 }
+*/
