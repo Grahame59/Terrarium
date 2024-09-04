@@ -1,11 +1,13 @@
 using OpenTK.Graphics.OpenGL4;
 using System;
 using System.IO;
+using OpenTK.Mathematics;
 using Error;
 
 public class Shader
 {
     public int Handle;
+    public int shaderDebugCount = 0;
 
     public Shader(string vertexPath, string fragmentPath)
     {
@@ -26,7 +28,6 @@ public class Shader
                 throw new FileNotFoundException("Fragment shader file not found.", fragmentPath);
             }
             
-
             // Compile the vertex shader
             ErrorLogger.SendError("Compiling vertex shader.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             int vertexShader = GL.CreateShader(ShaderType.VertexShader);
@@ -98,11 +99,42 @@ public class Shader
         try
         {
             GL.UseProgram(Handle);
-            ErrorLogger.SendError("Shader program is now in use.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            if (shaderDebugCount == 0)
+            {
+                ErrorLogger.SendError("Shader program is now in use.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+                shaderDebugCount++;
+            }
         }
         catch (Exception ex)
         {
             ErrorLogger.SendError($"Exception when using shader program: {ex.Message}", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            throw;
+        }
+    }
+
+    public void SetMatrix4(string name, Matrix4 matrix)
+    {
+        try
+        {
+            int location = GL.GetUniformLocation(Handle, name);
+
+            if (location == -1)
+            {
+                ErrorLogger.SendError($"Uniform '{name}' not found in shader program.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+                return;
+            }
+
+            GL.UniformMatrix4(location, false, ref matrix);
+
+            if (shaderDebugCount == 0)
+            {
+                ErrorLogger.SendError($"Matrix uniform '{name}' set successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+                shaderDebugCount++;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Exception when setting matrix uniform '{name}': {ex.Message}", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             throw;
         }
     }

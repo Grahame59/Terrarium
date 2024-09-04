@@ -4,202 +4,206 @@ using SkiaSharp;
 using OpenTK.Mathematics;
 using Error; // Custom error handling
 using Terrarium; // Custom terrain generation
+using OpenTK.Graphics.OpenGL4;
+using System.IO;
 
 public class TerrainGeneration
 {
-    public class Mesh
-    {
-        public Vector3[] vertices { get; set; } = Array.Empty<Vector3>();
-        public int[] triangles { get; set; } = Array.Empty<int>();
-        public Vector3[] normals { get; set; } = Array.Empty<Vector3>();
-    }
+    //Triangle vars
+    private int _triangleVertexArrayObject;
+    private int _triangleVertexBufferObject;
+    public int shaderTriangleDebug = 0;
 
-    public float[,] GenerateHeightmap(int width, int height, float scale)
-    {
-        try
-        {
-            if (width <= 0)
-            {
-                string message = $"Width must be a positive integer. (Received: {width})";
-                ErrorLogger.SendError(message, "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                throw new ArgumentException(message, nameof(width));
-            }
+    //Cube vars
+    private int _cubeVertexArrayObject;
+    private int _cubeVertexBufferObject;
+    private int _cubeElementBufferObject;
 
-            if (height <= 0)
-            {
-                string message = $"Height must be a positive integer. (Received: {height})";
-                ErrorLogger.SendError(message, "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                throw new ArgumentException(message, nameof(height));
-            }
+    //shader field Instance
+    private Shader _shader = null!;
+    private readonly Camera? _camera;
+    
 
-            if (scale <= 0)
-            {
-                string message = $"Scale must be greater than zero. (Received: {scale})";
-                ErrorLogger.SendError(message, "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                throw new ArgumentException(message, nameof(scale));
-            }
+    private readonly float[] _cubeVertices = {
+        // Positions         
+        -0.5f, -0.5f, -0.5f, // Front-bottom-left
+         0.5f, -0.5f, -0.5f, // Front-bottom-right
+         0.5f,  0.5f, -0.5f, // Front-top-right
+        -0.5f,  0.5f, -0.5f, // Front-top-left
+        -0.5f, -0.5f,  0.5f, // Back-bottom-left
+         0.5f, -0.5f,  0.5f, // Back-bottom-right
+         0.5f,  0.5f,  0.5f, // Back-top-right
+        -0.5f,  0.5f,  0.5f  // Back-top-left
+    };
 
-            var heightmap = new float[width, height];
-            for (int x = 0; x < width; x++)
-            {
-                for (int y = 0; y < height; y++)
-                {
-                    float nx = (x / (float)width) - 0.5f;
-                    float ny = (y / (float)height) - 0.5f;
-                    heightmap[x, y] = Mathf.PerlinNoise(nx * scale, ny * scale, 0);
-                }
-            }
+    private readonly uint[] _cubeIndices = {
+        // Front face
+        0, 1, 2, 2, 3, 0,
+        // Back face
+        4, 5, 6, 6, 7, 4,
+        // Left face
+        0, 3, 7, 7, 4, 0,
+        // Right face
+        1, 2, 6, 6, 5, 1,
+        // Top face
+        2, 3, 7, 7, 6, 2,
+        // Bottom face
+        0, 1, 5, 5, 4, 0
+    };
 
-            // Debug: Save heightmap as an image
-            SaveHeightmapAsImage(heightmap, "heightmap.png");
-
-            ErrorLogger.SendDebug($"Generated heightmap with dimensions {width}x{height} and scale {scale}.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-            return heightmap;
-        }
-        catch (Exception ex)
-        {
-            ErrorLogger.SendError($"Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-            throw; // Re-throw the exception after logging
-        }
-    }
-
-    private void SaveHeightmapAsImage(float[,] heightmap, string filePath)
-    {
-        int width = heightmap.GetLength(0);
-        int height = heightmap.GetLength(1);
-
-        using (var bitmap = new SKBitmap(width, height))
-        {
-            using (var canvas = new SKCanvas(bitmap))
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    for (int y = 0; y < height; y++)
-                    {
-                        int colorValue = (int)(heightmap[x, y] * 255);
-                        var color = new SKColor((byte)colorValue, (byte)colorValue, (byte)colorValue);
-                        bitmap.SetPixel(x, y, color);
-                    }
-                }
-            }
-
-            using (var image = SKImage.FromBitmap(bitmap))
-            using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-            {
-                using (var stream = System.IO.File.OpenWrite(filePath))
-                {
-                    data.SaveTo(stream);
-                }
-            }
-        }
-    }
-
-    public Mesh GenerateMesh(float[,] heightmap)
+    public TerrainGeneration(Camera camera)
     {
         try
         {
-            int width = heightmap.GetLength(0);
-            int height = heightmap.GetLength(1);
+            // Initialize shaders
+            _shader = new Shader
+            (
+                @"ZGameBox2.0\Shaders\vertexShader.glsl", 
+                @"ZGameBox2.0\Shaders\fragmentShader.glsl"
+            );
+            
+            _camera = camera; // Ensure camera is passed in and initialized
 
-            if (width <= 1 || height <= 1)
+            if (_shader == null!)
             {
-                string message = $"Width and height must be greater than 1. (Received: width={width}, height={height})";
-                ErrorLogger.SendError(message, "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                throw new ArgumentException(message);
+                ErrorLogger.SendError("Shader is in null state!", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+            }
+            
+            // Initialize Triangle
+            InitializeTriangle();
+
+            // Initialize Cube
+            InitializeCube();
+
+            ErrorLogger.SendError("Basic Terrain generation setup completed successfully.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Initialization Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+        }
+    }
+
+    private void InitializeTriangle()
+    {
+        _triangleVertexArrayObject = GL.GenVertexArray();
+        _triangleVertexBufferObject = GL.GenBuffer();
+
+        GL.BindVertexArray(_triangleVertexArrayObject);
+
+        // Simple vertex data for a single triangle
+        float[] vertices = {
+            0.0f,  0.5f, 0.0f,
+           -0.5f, -0.5f, 0.0f,
+            0.5f, -0.5f, 0.0f
+        };
+
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _triangleVertexBufferObject);
+        GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeof(float), vertices, BufferUsageHint.StaticDraw);
+
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+        GL.EnableVertexAttribArray(0);
+
+        GL.BindVertexArray(0); // Unbind VAO
+    }
+
+    private void InitializeCube()
+    {
+        _cubeVertexArrayObject = GL.GenVertexArray();
+        _cubeVertexBufferObject = GL.GenBuffer();
+        _cubeElementBufferObject = GL.GenBuffer();
+
+        GL.BindVertexArray(_cubeVertexArrayObject);
+
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _cubeVertexBufferObject);
+        GL.BufferData(BufferTarget.ArrayBuffer, _cubeVertices.Length * sizeof(float), _cubeVertices, BufferUsageHint.StaticDraw);
+
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+        GL.EnableVertexAttribArray(0);
+
+        GL.BindBuffer(BufferTarget.ElementArrayBuffer, _cubeElementBufferObject);
+        GL.BufferData(BufferTarget.ElementArrayBuffer, _cubeIndices.Length * sizeof(uint), _cubeIndices, BufferUsageHint.StaticDraw);
+
+        GL.BindVertexArray(0); // Unbind VAO
+    }
+
+    public void RenderTriangle()
+    {
+        try
+        {
+            // Clear the screen
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            // Use shader program
+            _shader.Use();
+
+            // Bind the vertex array object
+            GL.BindVertexArray(_triangleVertexArrayObject);
+
+            // Draw the triangle
+            GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
+
+            if (shaderTriangleDebug == 0)
+            {
+                ErrorLogger.SendError("Triangle rendered successfully.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+                shaderTriangleDebug++;
             }
 
-            var vertices = new Vector3[width * height];
-            var triangles = new int[(width - 1) * (height - 1) * 6];
-            var normals = new Vector3[vertices.Length];
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Rendering Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+        }
+    }
 
-            int triIndex = 0;
-            for (int x = 0; x < width; x++)
+        public void Render3DCube()
+        {
+            try
             {
-                for (int y = 0; y < height; y++)
+                // Clear the screen
+                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+                // Use shader program
+                _shader.Use();
+                
+                if (_camera != null)
                 {
-                    vertices[x + y * width] = new Vector3(x, heightmap[x, y], y);
+                    // Set uniforms
+                    var model = Matrix4.Identity; // or update based on cube's transformation
+                    var view = _camera.View;
+                    var projection = _camera.Projection;
 
-                    if (x < width - 1 && y < height - 1)
-                    {
-                        // Two triangles per square
-                        triangles[triIndex++] = x + y * width;
-                        triangles[triIndex++] = (x + 1) + y * width;
-                        triangles[triIndex++] = x + (y + 1) * width;
-
-                        triangles[triIndex++] = (x + 1) + y * width;
-                        triangles[triIndex++] = (x + 1) + (y + 1) * width;
-                        triangles[triIndex++] = x + (y + 1) * width;
-                    }
+                    _shader.SetMatrix4("model", Matrix4.Identity);
+                    _shader.SetMatrix4("view", _camera.View);
+                    _shader.SetMatrix4("projection", _camera.Projection);
+                } else
+                {
+                    ErrorLogger.SendError("Camera instance is null!", "TerrainGeneration.cs", "NetworkListener");
                 }
+     
+                // Bind the vertex array object
+                GL.BindVertexArray(_cubeVertexArrayObject);
+
+                // Draw the cube
+                GL.DrawElements(PrimitiveType.Triangles, _cubeIndices.Length, DrawElementsType.UnsignedInt, 0);
+
+                if (shaderTriangleDebug == 0)
+                {
+                    ErrorLogger.SendError("Cube rendered successfully.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+                    shaderTriangleDebug++;
+                }
+
             }
-
-            // Calculate normals
-            for (int i = 0; i < triangles.Length; i += 3)
+            catch (Exception ex)
             {
-                var v0 = vertices[triangles[i]];
-                var v1 = vertices[triangles[i + 1]];
-                var v2 = vertices[triangles[i + 2]];
-                var normal = Vector3.Cross(v1 - v0, v2 - v0).Normalized();
-
-                normals[triangles[i]] += normal;
-                normals[triangles[i + 1]] += normal;
-                normals[triangles[i + 2]] += normal;
+                ErrorLogger.SendError($"Rendering Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
             }
-
-            for (int i = 0; i < normals.Length; i++)
-            {
-                normals[i] = normals[i].Normalized();
-            }
-
-            var mesh = new Mesh
-            {
-                vertices = vertices,
-                triangles = triangles,
-                normals = normals
-            };
-
-            ErrorLogger.SendDebug($"Generated mesh with {vertices.Length} vertices and {triangles.Length / 3} triangles.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-            return mesh;
         }
-        catch (Exception ex)
-        {
-            ErrorLogger.SendError($"Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-            throw; // Re-throw the exception after logging
-        }
-    }
 
-    public void GenerateAndVisualizeTerrain(int width, int height, float scale)
-    {
-        try
-        {
-            var heightmap = GenerateHeightmap(width, height, scale);
-            var mesh = GenerateMesh(heightmap);
 
-            // Here, you would integrate with your rendering system to display the mesh.
-            // For example:
-            // RenderMesh(mesh);
 
-            ErrorLogger.SendDebug("Terrain visualization complete.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-        }
-        catch (Exception ex)
-        {
-            ErrorLogger.SendError($"Exception during terrain generation and visualization: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-        }
-    }
 
-    public void MeasurePerformance(int width, int height, float scale)
-    {
-        try
-        {
-            var stopwatch = Stopwatch.StartNew();
-            GenerateAndVisualizeTerrain(width, height, scale);
-            stopwatch.Stop();
 
-            ErrorLogger.SendDebug($"Generation time for width={width}, height={height}, scale={scale}: {stopwatch.ElapsedMilliseconds} ms", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-        }
-        catch (Exception ex)
-        {
-            ErrorLogger.SendError($"Exception during performance measurement: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-        }
-    }
-}
+
+
+
+} //end of terrainGeneration class
