@@ -16,34 +16,36 @@ public class Shader
             string vertexShaderSource = File.ReadAllText(vertexPath);
             string fragmentShaderSource = File.ReadAllText(fragmentPath);
 
-            ErrorLogger.SendError("Loading shader sources from files.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Loading shader sources from files.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
 
             // Load the shader sources from files
             if (!File.Exists(vertexPath))
             {
+                ErrorLogger.SendError($"Vertex shader file not found. {vertexPath}", "ShaderProgram.cs (Terrarium)", "NetworkListener");
                 throw new FileNotFoundException("Vertex shader file not found.", vertexPath);
             }
             if (!File.Exists(fragmentPath))
             {
+                ErrorLogger.SendError($"Vertex shader file not found. {fragmentPath}", "ShaderProgram.cs (Terrarium)", "NetworkListener");
                 throw new FileNotFoundException("Fragment shader file not found.", fragmentPath);
             }
             
             // Compile the vertex shader
-            ErrorLogger.SendError("Compiling vertex shader.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Compiling vertex shader.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             int vertexShader = GL.CreateShader(ShaderType.VertexShader);
             GL.ShaderSource(vertexShader, vertexShaderSource);
             GL.CompileShader(vertexShader);
             CheckShaderCompilation(vertexShader);
 
             // Compile the fragment shader
-            ErrorLogger.SendError("Compiling fragment shader.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Compiling fragment shader.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             int fragmentShader = GL.CreateShader(ShaderType.FragmentShader);
             GL.ShaderSource(fragmentShader, fragmentShaderSource);
             GL.CompileShader(fragmentShader);
             CheckShaderCompilation(fragmentShader);
 
             // Link the shaders into a program
-            ErrorLogger.SendError("Linking shaders into a program.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Linking shaders into a program.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             Handle = GL.CreateProgram();
             GL.AttachShader(Handle, vertexShader);
             GL.AttachShader(Handle, fragmentShader);
@@ -51,11 +53,11 @@ public class Shader
             CheckProgramLinking(Handle);
 
             // Clean up the shaders as they're no longer needed after linking
-            ErrorLogger.SendError("Cleaning up shaders.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Cleaning up shaders.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             GL.DeleteShader(vertexShader);
             GL.DeleteShader(fragmentShader);
 
-            ErrorLogger.SendError("Shader program created successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Shader program created successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
         }
         catch (Exception ex)
         {
@@ -75,7 +77,7 @@ public class Shader
         }
         else
         {
-            ErrorLogger.SendError("Shader compiled successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Shader compiled successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
         }
     }
 
@@ -90,7 +92,7 @@ public class Shader
         }
         else
         {
-            ErrorLogger.SendError("Program linked successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendDebug("Program linked successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
         }
     }
 
@@ -101,7 +103,7 @@ public class Shader
             GL.UseProgram(Handle);
             if (shaderDebugCount == 0)
             {
-                ErrorLogger.SendError("Shader program is now in use.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+                ErrorLogger.SendDebug("Shader program is now in use.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
                 shaderDebugCount++;
             }
         }
@@ -128,7 +130,7 @@ public class Shader
 
             if (shaderDebugCount == 0)
             {
-                ErrorLogger.SendError($"Matrix uniform '{name}' set successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
+                ErrorLogger.SendDebug($"Matrix uniform '{name}' set successfully.", "ShaderProgram.cs (Terrarium)", "NetworkListener");
                 shaderDebugCount++;
             }
         }
@@ -137,5 +139,10 @@ public class Shader
             ErrorLogger.SendError($"Exception when setting matrix uniform '{name}': {ex.Message}", "ShaderProgram.cs (Terrarium)", "NetworkListener");
             throw;
         }
+    }
+    public void SetVector3(string name, Vector3 value)
+    {
+        int location = GL.GetUniformLocation(Handle, name);
+        GL.Uniform3(location, value.X, value.Y, value.Z);
     }
 }

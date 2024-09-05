@@ -6,6 +6,7 @@ using Error; // Custom error handling
 using Terrarium; // Custom terrain generation
 using OpenTK.Graphics.OpenGL4;
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 
 public class TerrainGeneration
 {
@@ -62,7 +63,7 @@ public class TerrainGeneration
                 @"ZGameBox2.0\Shaders\fragmentShader.glsl"
             );
             
-            _camera = camera; // Ensure camera is passed in and initialized
+            _camera = camera ?? throw new ArgumentNullException(nameof(camera), "Camera cannot be null.");
 
             if (_shader == null!)
             {
@@ -155,55 +156,304 @@ public class TerrainGeneration
         }
     }
 
-        public void Render3DCube()
+    public void Render3DCube()
+    {
+        try
         {
-            try
+            // Clear the screen
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            // Use shader program
+            _shader.SetVector3("lightPos", new Vector3(10.0f, 10.0f, 10.0f));
+            _shader.SetVector3("lightColor", new Vector3(1.0f, 1.0f, 1.0f));
+            _shader.SetVector3("objectColor", new Vector3(0.5f, 0.35f, 0.25f)); // Example color
+            _shader.Use();
+            
+            if (_camera != null)
             {
-                // Clear the screen
-                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+                // Set uniforms
+                var model = Matrix4.Identity; // or update based on cube's transformation
+                var view = _camera.View;
+                var projection = _camera.Projection;
 
-                // Use shader program
-                _shader.Use();
-                
-                if (_camera != null)
-                {
-                    // Set uniforms
-                    var model = Matrix4.Identity; // or update based on cube's transformation
-                    var view = _camera.View;
-                    var projection = _camera.Projection;
-
-                    _shader.SetMatrix4("model", Matrix4.Identity);
-                    _shader.SetMatrix4("view", _camera.View);
-                    _shader.SetMatrix4("projection", _camera.Projection);
-                } else
-                {
-                    ErrorLogger.SendError("Camera instance is null!", "TerrainGeneration.cs", "NetworkListener");
-                }
-     
-                // Bind the vertex array object
-                GL.BindVertexArray(_cubeVertexArrayObject);
-
-                // Draw the cube
-                GL.DrawElements(PrimitiveType.Triangles, _cubeIndices.Length, DrawElementsType.UnsignedInt, 0);
-
-                if (shaderTriangleDebug == 0)
-                {
-                    ErrorLogger.SendError("Cube rendered successfully.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                    shaderTriangleDebug++;
-                }
-
+                _shader?.SetMatrix4("model", Matrix4.Identity);
+                _shader?.SetMatrix4("view", _camera.View);
+                _shader?.SetMatrix4("projection", _camera.Projection);
+            } else
+            {
+                ErrorLogger.SendError("Camera instance is null!", "TerrainGeneration.cs", "NetworkListener");
             }
-            catch (Exception ex)
+    
+            // Bind the vertex array object
+            GL.BindVertexArray(_cubeVertexArrayObject);
+
+            // Draw the cube
+            GL.DrawElements(PrimitiveType.Triangles, _cubeIndices.Length, DrawElementsType.UnsignedInt, 0);
+
+            if (shaderTriangleDebug == 0)
             {
-                ErrorLogger.SendError($"Rendering Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+                ErrorLogger.SendError("Cube rendered successfully.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+                shaderTriangleDebug++;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Rendering Exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+        }
+    }
+        
+
+    public void RenderTerrainOld(int width, int depth, float scale, float heightMultiplier)
+    {
+        try
+        {
+            // Clear the screen
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            // Use shader program
+            _shader.SetVector3("lightPos", new Vector3(10.0f, 10.0f, 10.0f));
+            _shader.SetVector3("lightColor", new Vector3(1.0f, 1.0f, 1.0f));
+            _shader.SetVector3("objectColor", new Vector3(0.5f, 0.35f, 0.25f)); // Example color
+            _shader.Use();
+            
+                
+            if (_camera != null)
+            {
+                // Set camera matrices
+                _shader.SetVector3("viewPos", _camera.Position);
+                _shader.SetMatrix4("view", _camera.View);
+                _shader.SetMatrix4("projection", _camera.Projection);
+
+                for (int x = 0; x < width; x++)
+                {
+                    for (int z = 0; z < depth; z++)
+                    {
+                        // Generate height using Perlin noise
+                        float height = Mathf.PerlinNoise(x * scale, 0, z * scale) * heightMultiplier;
+
+                        // Model matrix for positioning each cube
+                        var model = Matrix4.CreateTranslation(x, height, z);
+                        _shader.SetMatrix4("model", model);
+
+                        // Bind the cube's VAO
+                        GL.BindVertexArray(_cubeVertexArrayObject);
+
+                        // Draw the cube
+                        GL.DrawElements(PrimitiveType.Triangles, _cubeIndices.Length, DrawElementsType.UnsignedInt, 0);
+                    }
+                }
+            }
+            else
+            {
+                ErrorLogger.SendError("Camera instance is null!", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
             }
         }
-
-
-
-
-
-
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Terrain rendering exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+        }
+    }
 
 
 } //end of terrainGeneration class
+
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+
+
+
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
+public class Chunk
+{
+    private readonly int _width;
+    private readonly int _depth;
+    private readonly float _scale;
+    private readonly float _heightMultiplier;
+    private float[,] _heightMap;
+    private readonly int _vertexCount;
+    private readonly uint[] _indices;
+    private readonly int _vertexArrayObject;
+    private readonly int _vertexBufferObject;
+    private readonly int _elementBufferObject;
+
+
+    private List<Chunk> _chunks = new List<Chunk>();
+     private readonly Camera _camera;
+    private readonly Shader _shader;
+
+
+    public Chunk(int width, int depth, float scale, float heightMultiplier, Camera camera, Shader shader)
+    {
+        _width = width;
+        _depth = depth;
+        _scale = scale;
+        _heightMultiplier = heightMultiplier;
+        _camera = camera ?? throw new ArgumentNullException(nameof(camera));
+        _shader = shader ?? throw new ArgumentNullException(nameof(shader));
+
+
+        _vertexCount = (width + 1) * (depth + 1);
+        _indices = GenerateIndices(width, depth);
+        
+        _vertexArrayObject = GL.GenVertexArray();
+        _vertexBufferObject = GL.GenBuffer();
+        _elementBufferObject = GL.GenBuffer();
+
+        // Initialize _heightMap
+        _heightMap = new float[width + 1, depth + 1];
+
+        GenerateTerrain();
+        SetupBuffers();
+    }
+
+    private void GenerateTerrain()
+    {
+        _heightMap = new float[_width, _depth];
+        for (int x = 0; x < _width; x++)
+        {
+            for (int z = 0; z < _depth; z++)
+            {
+                _heightMap[x, z] = Mathf.PerlinNoise(x * _scale, 0, z * _scale) * _heightMultiplier;
+            }
+        }
+    }
+
+    private void SetupBuffers()
+    {
+        GL.BindVertexArray(_vertexArrayObject);
+
+        // Vertex buffer
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
+        GL.BufferData(BufferTarget.ArrayBuffer, _vertexCount * 3 * sizeof(float), GenerateVertices(), BufferUsageHint.StaticDraw);
+
+        // Element buffer
+        GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
+        GL.BufferData(BufferTarget.ElementArrayBuffer, _indices.Length * sizeof(uint), _indices, BufferUsageHint.StaticDraw);
+
+        // Setup vertex attributes
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+        GL.EnableVertexAttribArray(0);
+
+        GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+        GL.BindVertexArray(0);
+    }
+
+    private float[] GenerateVertices()
+    {
+        var vertices = new List<float>();
+
+        for (int x = 0; x < _width; x++)  // Changed from x <= _width
+        {
+            for (int z = 0; z < _depth; z++)  // Changed from z <= _depth
+            {
+                vertices.Add(x);
+                vertices.Add(_heightMap[x, z]);
+                vertices.Add(z);
+            }
+        }
+
+        return vertices.ToArray();
+    }
+
+
+    private uint[] GenerateIndices(int width, int depth)
+    {
+        var indices = new List<uint>();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int z = 0; z < depth; z++)
+            {
+                int topLeft = x + z * (width + 1);
+                int topRight = (x + 1) + z * (width + 1);
+                int bottomLeft = x + (z + 1) * (width + 1);
+                int bottomRight = (x + 1) + (z + 1) * (width + 1);
+
+                indices.Add((uint)topLeft);
+                indices.Add((uint)bottomLeft);
+                indices.Add((uint)topRight);
+                indices.Add((uint)topRight);
+                indices.Add((uint)bottomLeft);
+                indices.Add((uint)bottomRight);
+            }
+        }
+
+        return indices.ToArray();
+    }
+
+    public void Render()
+    {
+        GL.BindVertexArray(_vertexArrayObject);
+        GL.DrawElements(PrimitiveType.Triangles, _indices.Length, DrawElementsType.UnsignedInt, 0);
+        GL.BindVertexArray(0);
+    }
+
+    public void RenderTerrain(int chunkWidth, int chunkDepth, float scale, float heightMultiplier)
+    {
+        try
+        {
+            // Clear the screen
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            // Use shader program
+            if (_shader == null)
+            {
+                ErrorLogger.SendError("Shader is not initialized.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+                throw new InvalidOperationException("Shader is not initialized.");
+            }
+
+
+            // Use shader program
+            _shader.Use();
+            _shader.SetVector3("lightPos", new Vector3(10.0f, 10.0f, 10.0f));
+            _shader.SetVector3("lightColor", new Vector3(1.0f, 1.0f, 1.0f));
+            _shader.SetVector3("objectColor", new Vector3(0.5f, 0.35f, 0.25f));
+
+             if (_camera == null)
+            {
+                ErrorLogger.SendError("Camera is not initialized.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+                throw new InvalidOperationException("Camera is not initialized.");
+            }
+
+            // Set camera matrices
+            _shader.SetVector3("viewPos", _camera.Position);
+            _shader.SetMatrix4("view", _camera.View);
+            _shader.SetMatrix4("projection", _camera.Projection);
+
+            foreach (var chunk in _chunks)
+            {
+                if (_chunks == null)
+                {
+                    ErrorLogger.SendError("Chunks list is not initialized.", "TerrainGenerator.cs (Terrarium)", "NetworkListener");
+                    throw new InvalidOperationException("Chunks list is not initialized.");
+                }
+                chunk.Render();
+            }
+            
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Terrain rendering exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+        }
+    }
+
+    public void InitializeChunks(int chunkWidth, int chunkDepth, float scale, float heightMultiplier)
+    {
+        _chunks.Clear();
+
+        int numChunksX = 3; // Number of chunks in the x direction
+        int numChunksZ = 3; // Number of chunks in the z direction
+
+        for (int x = 0; x < numChunksX; x++)
+        {
+            for (int z = 0; z < numChunksZ; z++)
+            {
+                _chunks.Add(new Chunk(chunkWidth, chunkDepth, scale, heightMultiplier, _camera, _shader));
+            }
+        }
+    }
+
+}
+

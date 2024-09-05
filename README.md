@@ -16,5 +16,8 @@ Ecosytem Simulation Project all in Pure C# with SMFL
 - working on shaders, adding a camera, sorely lacking in good comprehension of overall code using a lot of help and trying to learn the code as I work through errors... 
 - Having issues Loading the Terrain covered a lot of bases, very unsure of why it won't render as I was able to render simple shapes, the PerlinNoise math is correct, etc... Will probably take a break and return in next session... 
 
-#9.4.24 - 2:50 pm
+# 9.4.24 - 2:50 pm
 - Been having a lot of trouble rendering terrain from PerlinNoise... Working on Really learning and slowly scalling towards Terrain rendering for Terrarium.. Rendering different shapes from 2D to 3D today... 
+
+# 9.5.24 - 12:52 am
+- I have tried so many different approaches for PerlinNoise procedural terrain generation and I may rip my hair out soon if I can't get it to work... A little to out of my depth for this in pure C# environment... Have been using Chatgbt to close my gaps in knowledge but from my slight comprehension of shaders and GPU code to my incompetence in the PerlinNoise algo specifically the Linear alg... Need to start smaller or try to hand create terrain possibly not even sure... Going to keep pushing through and learning more ! 

@@ -11,6 +11,15 @@ public class Camera
     private float _aspectRatio;
     private float _radius = 10.0f; // Distance from the target
     private float _angle = 0.0f; // Rotation angle
+    public Vector3 Position
+    {
+        get { return _position; }
+        set
+        {
+            _position = value;
+            UpdateViewMatrix();
+        }
+    }
 
     public Matrix4 View { get; private set; }
     public Matrix4 Projection { get; private set; }
