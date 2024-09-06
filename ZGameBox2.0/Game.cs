@@ -1,121 +1,179 @@
-using OpenTK.Windowing.Desktop;
+using OpenTK.Windowing.Desktop; 
 using OpenTK.Windowing.Common;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using System;
 using Error;
 
-class Program : GameWindow
+public class Game : GameWindow
 {
-    private TerrainGeneration? _terrainGeneration;
-    private Chunk? _chunk;
-    private Camera _camera;
-    private Shader _shader;
+    
+    private Shader? _shader;
+    private float[,] _heightMap = new float[0, 0];
+    private float[,] _normalMap = new float[0, 0];
+    private uint[] _indices = new uint[0];
+    private Camera? _camera;
 
+    private List<Chunk> _chunks;
+    public int frameDebugCount = 0;
+    public int chunkCreationCount = 0;  // Counter for Chunk creation
 
-    public Program()
-        : base(GameWindowSettings.Default, new NativeWindowSettings() 
-        { 
-            ClientSize = new Vector2i(800, 600), 
-            Title = "TERRARIUM Testing 0.3" 
-        })
+    private static readonly object _lock = new object();
+
+    public Game(GameWindowSettings gameWindowSettings, NativeWindowSettings nativeWindowSettings)
+        : base(gameWindowSettings, nativeWindowSettings)
     {
-        // Initialize _camera with a placeholder value
-        _camera = new Camera(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, 1.0f);
-
-        _shader = new Shader(@"ZGameBox2.0\Shaders\vertexShader.glsl", @"ZGameBox2.0\Shaders\fragmentShader.glsl");
-
-        // Initialize _chunk with default values or parameters
-        //_chunk = new Chunk(32, 32, 0.05f, 5.0f, _camera, _shader);
-
+        _chunks = new List<Chunk>();
+    }
+    
+    // Default constructor
+    public Game()
+        : this(GameWindowSettings.Default, NativeWindowSettings.Default)
+    {
     }
 
     protected override void OnLoad()
     {
         base.OnLoad();
-
-        // Enable depth testing
-        GL.Enable(EnableCap.DepthTest);
-        GL.DepthFunc(DepthFunction.Less);
-     
-        // Initialize the camera with correct aspect ratio
-        float aspectRatio = ClientSize.X / (float)ClientSize.Y;
-        _camera = new Camera(new Vector3(10, 10, 10), Vector3.Zero, Vector3.UnitY, aspectRatio);
-
-        // Initialize shader
-        _shader = new Shader(@"ZGameBox2.0\Shaders\vertexShader.glsl", @"ZGameBox2.0\Shaders\fragmentShader.glsl");
-
-        _terrainGeneration = new TerrainGeneration(_camera);
-        
-
-        
-
-        // Initialize the chunks once
-        if (_chunk != null)
+        try
         {
-            //_chunk.InitializeChunks(chunkWidth: 32, chunkDepth: 32, scale: 0.05f, heightMultiplier: 5.0f);
-        }
+            ErrorLogger.SendDebug("Loading shader sources from files.", "Game.cs (Terrarium)", "NetworkListener");
+            _shader = new Shader(@"ZGameBox2.0\Shaders\vertexShader.glsl", @"ZGameBox2.0\Shaders\fragmentShader.glsl");
 
+            // Use ClientSize to get the dimensions
+            float aspectRatio = ClientSize.X / (float)ClientSize.Y;
+            _camera = new Camera(new Vector3(0, 10, 10), Vector3.Zero, Vector3.UnitY, aspectRatio);
+
+            if (_chunks.Count == 0) // Ensure chunks are only initialized once
+            {
+                InitializeChunks();
+            }
+            GL.ClearColor(Color4.CornflowerBlue);
+
+            ErrorLogger.SendDebug("Initialization completed successfully.", "Game.cs (Terrarium)", "NetworkListener");
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Initialization exception: {ex.Message}", "Game.cs", "NetworkListener");
+        }
     }
 
-    protected override void OnRenderFrame(FrameEventArgs e)
+    private void InitializeChunks()
     {
-         if (_terrainGeneration != null)
+        try
         {
-       
-            // Parameters for terrain generation 
-            /*
-            int width = 50;
-            int depth = 50;
+            if (_chunks.Count > 0)
+            {
+                ErrorLogger.SendError("Chunks already initialized.", "Game.cs", "NetworkListener");
+                return;
+            }
+
+            int chunkWidth = 16;
+            int chunkDepth = 16;
             float scale = 0.1f;
-            float heightMultiplier = 5.0f; */
+            float heightMultiplier = 10.0f;
 
-            // Render terrain with parameters
-            //_terrainGeneration.RenderTerrainOld(width, depth, scale, heightMultiplier);
+            if (_camera == null || _shader == null)
+            {
+                ErrorLogger.SendError("Camera or Shader is not initialized.", "Game.cs", "NetworkListener");
+                return;
+            }
 
-            
-            _terrainGeneration.Render3DCube();
-
-        } else
-        {
-            ErrorLogger.SendError("TerrainGeneration Instance Field is null!", "Game.cs (Terrarium)", "NetworkListener");
+            for (int x = 0; x < 3; x++)
+            {
+                for (int z = 0; z < 3; z++)
+                {
+                    _chunks.Add(new Chunk(chunkWidth, chunkDepth, scale, heightMultiplier, _camera, _shader));
+                    chunkCreationCount++;  // Increment the count on each Chunk creation
+                    ErrorLogger.SendDebug($"Chunk created. Total chunks: {chunkCreationCount}", "Game.cs (Terrarium)", "NetworkListener");
+                }
+            }
+            ErrorLogger.SendDebug("Chunks initialized successfully.", "Game.cs (Terrarium)", "NetworkListener");
         }
-
-        if (_chunk != null)
+        catch (Exception ex)
         {
-            // Render the terrain
-            //_chunk.RenderTerrain(chunkWidth: 32, chunkDepth: 32, scale: 0.05f, heightMultiplier: 5.0f);
+            ErrorLogger.SendError($"Chunk initialization exception: {ex.Message}", "Game.cs", "NetworkListener");
         }
-        else
-        {
-           // ErrorLogger.SendError("Chunk instance is null!", "Game.cs (Terrarium)", "NetworkListener");
-        }
-
-        SwapBuffers();
     }
+
 
     protected override void OnUpdateFrame(FrameEventArgs e)
     {
         base.OnUpdateFrame(e);
 
-        // Get current keyboard state
-        var keyboardState = KeyboardState;
-
-        // Update the camera based on keyboard input
-        _camera.UpdateKeyboardInput(keyboardState);
-
+        // Check if _camera is initialized
+        if (_camera == null)
+        {
+            ErrorLogger.SendError("Camera or Shader is not initialized.", "Game.cs", "NetworkListener");
+            return;
+        }
+        try
+        {
+            _camera.UpdateKeyboardInput(KeyboardState);
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Update frame exception: {ex.Message}", "Game.cs", "NetworkListener");
+        }
     }
 
+    protected override void OnRenderFrame(FrameEventArgs e)
+    {
+        base.OnRenderFrame(e);
+
+        // Check if _camera and _shader are initialized
+        if (_camera == null || _shader == null)
+        {
+            ErrorLogger.SendError("Camera or Shader is not initialized.", "Game.cs", "NetworkListener");
+            return;
+        }
+
+        try
+        {
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            _shader.Use();
+            
+            // Set global uniforms
+            _shader.SetVector3("lightPos", new Vector3(10.0f, 10.0f, 10.0f));
+            _shader.SetVector3("lightColor", new Vector3(1.0f, 1.0f, 1.0f));
+            _shader.SetVector3("objectColor", new Vector3(0.5f, 0.35f, 0.25f));
+            _shader.SetVector3("viewPos", _camera.Position);  // Add this line to set viewPos
+
+            _shader.SetMatrix4("view", _camera.GetViewMatrix());
+            _shader.SetMatrix4("projection", _camera.GetProjectionMatrix());
+
+            foreach (var chunk in _chunks)
+            {
+                ErrorLogger.SendDebug("Rendering chunk.", "Game.cs (Terrarium)", "NetworkListener");
+                chunk.Render();
+            }
+
+            SwapBuffers();
+
+            lock (_lock)
+            {
+                if (frameDebugCount == 0)
+                {
+                    ErrorLogger.SendDebug("Frame rendered successfully.", "Game.cs (Terrarium)", "NetworkListener");
+                    frameDebugCount++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Render frame exception: {ex.Message}", "Game.cs", "NetworkListener");
+        }
+    }
     protected override void OnUnload()
     {
+        // Implement cleanup if necessary
     }
 
-    // Entry point for the application
     [STAThread]
     public static void Main(string[] args)
     {
-        // Create a new instance of the Program class and run it
-        using (var game = new Program())
+        using (var game = new Game())
         {
             game.Run();
         }

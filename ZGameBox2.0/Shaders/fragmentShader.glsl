@@ -6,14 +6,14 @@ in vec3 FragPos;  // Fragment position in world space
 in vec3 Normal;   // Normal vector passed from the vertex shader
 
 uniform vec3 lightPos;  // Position of the light
-uniform vec3 viewPos;   // Camera position
 uniform vec3 lightColor; // Light color
 uniform vec3 objectColor; // Color of the object (terrain)
+uniform vec3 viewPos;  // Add this line to declare viewPos as a uniform
 
 void main()
 {
     // Ambient lighting
-    float ambientStrength = 0.2;
+    float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * lightColor;
 
     // Diffuse lighting

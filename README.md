@@ -1,5 +1,5 @@
 # Terrarium
-Ecosytem Simulation Project all in Pure C# with SMFL
+Ecosytem Simulation Project all in Pure C# with OpenTk & OpenGL (Originally w/ SFML before I realized it isn't for 3D applications)
 
 # 7.15.24 - 6:01 pm 
 - Setup the main file directory, dependencies, and general framework...
@@ -21,3 +21,6 @@ Ecosytem Simulation Project all in Pure C# with SMFL
 
 # 9.5.24 - 12:52 am
 - I have tried so many different approaches for PerlinNoise procedural terrain generation and I may rip my hair out soon if I can't get it to work... A little to out of my depth for this in pure C# environment... Have been using Chatgbt to close my gaps in knowledge but from my slight comprehension of shaders and GPU code to my incompetence in the PerlinNoise algo specifically the Linear alg... Need to start smaller or try to hand create terrain possibly not even sure... Going to keep pushing through and learning more ! 
+
+# 9.6.24 - 12:28 am
+- Spent the last 4 hours just straight debugging and rewriting code... Still cannot render any terrain... Most frustrating project I have ever taken on..

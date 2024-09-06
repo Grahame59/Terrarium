@@ -7,6 +7,8 @@ using Terrarium; // Custom terrain generation
 using OpenTK.Graphics.OpenGL4;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System;
+using System.Collections.Generic;
 
 public class TerrainGeneration
 {
@@ -230,11 +232,11 @@ public class TerrainGeneration
                     for (int z = 0; z < depth; z++)
                     {
                         // Generate height using Perlin noise
-                        float height = Mathf.PerlinNoise(x * scale, 0, z * scale) * heightMultiplier;
+                        //float height = Mathf.PerlinNoise(x * scale, 0, z * scale) * heightMultiplier;
 
                         // Model matrix for positioning each cube
-                        var model = Matrix4.CreateTranslation(x, height, z);
-                        _shader.SetMatrix4("model", model);
+                       // var model = Matrix4.CreateTranslation(x, height, z);
+                        //_shader.SetMatrix4("model", model);
 
                         // Bind the cube's VAO
                         GL.BindVertexArray(_cubeVertexArrayObject);
@@ -265,27 +267,43 @@ public class TerrainGeneration
 
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
+
+
+
 public class Chunk
 {
     private readonly int _width;
     private readonly int _depth;
     private readonly float _scale;
     private readonly float _heightMultiplier;
-    private float[,] _heightMap;
+    private float[,] _heightMap = new float[0, 0]; // Initialize with default empty array
+    private Vector3[,] _normalMap = new Vector3[0, 0]; // Initialize with default empty array
     private readonly int _vertexCount;
-    private readonly uint[] _indices;
+    private uint[] _indices = new uint[0]; // Initialize with default empty array
     private readonly int _vertexArrayObject;
     private readonly int _vertexBufferObject;
+    private readonly int _normalBufferObject;
     private readonly int _elementBufferObject;
-
-
-    private List<Chunk> _chunks = new List<Chunk>();
-     private readonly Camera _camera;
-    private readonly Shader _shader;
-
+    private readonly Camera? _camera;
+    private readonly Shader? _shader;
+    public int bufferDebugCount = 0;
+    public int terrainGenDebugCount = 0;
+    public int renderDebugCount = 0;
+    private static readonly object _lock = new object();
+    private bool _initialized = false;
+    private bool _terrainGenerated = false;
+    private bool _buffersSetUp = false;
 
     public Chunk(int width, int depth, float scale, float heightMultiplier, Camera camera, Shader shader)
     {
+        if (_initialized)
+        {
+            ErrorLogger.SendError("Chunk already initialized.", "Chunk.cs (Terrarium)", "NetworkListener");
+            return;
+        }
+
+        _initialized = true;
+
         _width = width;
         _depth = depth;
         _scale = scale;
@@ -293,60 +311,163 @@ public class Chunk
         _camera = camera ?? throw new ArgumentNullException(nameof(camera));
         _shader = shader ?? throw new ArgumentNullException(nameof(shader));
 
+        ErrorLogger.SendDebug($"Chunk constructor called at {DateTime.Now}", "Chunk.cs (Terrarium)", "NetworkListener");
+        _vertexCount = (_width + 1) * (_depth + 1);
+        _indices = GenerateIndices();
 
-        _vertexCount = (width + 1) * (depth + 1);
-        _indices = GenerateIndices(width, depth);
-        
         _vertexArrayObject = GL.GenVertexArray();
         _vertexBufferObject = GL.GenBuffer();
+        _normalBufferObject = GL.GenBuffer();
         _elementBufferObject = GL.GenBuffer();
 
-        // Initialize _heightMap
-        _heightMap = new float[width + 1, depth + 1];
-
+        _heightMap = new float[_width + 1, _depth + 1];
+        _normalMap = new Vector3[_width + 1, _depth + 1];
         GenerateTerrain();
         SetupBuffers();
     }
 
     private void GenerateTerrain()
     {
-        _heightMap = new float[_width, _depth];
-        for (int x = 0; x < _width; x++)
+        lock (_lock)
         {
-            for (int z = 0; z < _depth; z++)
+            if (_terrainGenerated)
             {
-                _heightMap[x, z] = Mathf.PerlinNoise(x * _scale, 0, z * _scale) * _heightMultiplier;
+                ErrorLogger.SendError("Terrain already generated.", "Chunk.cs (Terrarium)", "NetworkListener");
+                return;
+            }
+
+            _terrainGenerated = true;
+
+            ErrorLogger.SendDebug("Generating terrain...", "Chunk.cs (Terrarium)", "NetworkListener");
+
+            // Generate height map
+            for (int x = 0; x <= _width; x++)
+            {
+                for (int z = 0; z <= _depth; z++)
+                {
+                    _heightMap[x, z] = PerlinNoise.Get(x * _scale, 0, z * _scale) * _heightMultiplier;
+                }
+            }
+            
+            // Log height map values for debugging
+            int limitdebugMax = 20;
+            for (int x = 0; x <= _width; x++)
+            {
+                for (int z = 0; z <= _depth; z++)
+                {
+                    for (int limitdebug = 0; limitdebug <= limitdebugMax; limitdebug++)
+                    {
+                        ErrorLogger.SendDebug($"HeightMap[{x}, {z}] = {_heightMap[x, z]}", "Chunk.cs (Terrarium)", "NetworkListener");
+                    }
+                }
+            }
+
+            // Calculate normals
+            CalculateNormals();
+
+            lock (_lock)
+            {
+                if(terrainGenDebugCount == 0)
+                {
+                    ErrorLogger.SendDebug("Terrain and normals generated successfully.", "Chunk.cs (Terrarium)", "NetworkListener");
+                    terrainGenDebugCount++;
+                }
+            }
+        }
+    }
+
+    private void CalculateNormals()
+    {
+        for (int x = 0; x <= _width; x++)
+        {
+            for (int z = 0; z <= _depth; z++)
+            {
+                Vector3 normal = Vector3.Zero;
+                int count = 0;
+
+                // Calculate normal for surrounding triangles
+                for (int dx = -1; dx <= 0; dx++)
+                {
+                    for (int dz = -1; dz <= 0; dz++)
+                    {
+                        if (x + dx >= 0 && x + dx < _width && z + dz >= 0 && z + dz < _depth)
+                        {
+                            Vector3 v1 = new Vector3(x + dx, _heightMap[x + dx, z + dz], z + dz);
+                            Vector3 v2 = new Vector3(x + dx + 1, _heightMap[x + dx + 1, z + dz], z + dz);
+                            Vector3 v3 = new Vector3(x + dx, _heightMap[x + dx, z + dz + 1], z + dz + 1);
+                            Vector3 triangleNormal = Vector3.Cross(v2 - v1, v3 - v1);
+                            normal += triangleNormal;
+                            count++;
+                        }
+                    }
+                }
+
+                if (count > 0)
+                {
+                    normal /= count;
+                    normal.Normalize();
+                }
+                else
+                {
+                    normal = Vector3.UnitY;
+                }
+
+                _normalMap[x, z] = normal;
             }
         }
     }
 
     private void SetupBuffers()
     {
-        GL.BindVertexArray(_vertexArrayObject);
+        lock (_lock)
+        {
+            if (_buffersSetUp)
+            {
+                ErrorLogger.SendError("Buffers already set up.", "Chunk.cs (Terrarium)", "NetworkListener");
+                return;
+            }
 
-        // Vertex buffer
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
-        GL.BufferData(BufferTarget.ArrayBuffer, _vertexCount * 3 * sizeof(float), GenerateVertices(), BufferUsageHint.StaticDraw);
+            _buffersSetUp = true;
 
-        // Element buffer
-        GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
-        GL.BufferData(BufferTarget.ElementArrayBuffer, _indices.Length * sizeof(uint), _indices, BufferUsageHint.StaticDraw);
+            GL.BindVertexArray(_vertexArrayObject);
 
-        // Setup vertex attributes
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
-        GL.EnableVertexAttribArray(0);
+            // Vertex buffer
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
+            GL.BufferData(BufferTarget.ArrayBuffer, _vertexCount * 3 * sizeof(float), GenerateVertices(), BufferUsageHint.StaticDraw);
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+            GL.EnableVertexAttribArray(0);
 
-        GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-        GL.BindVertexArray(0);
+            // Normal buffer
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _normalBufferObject);
+            GL.BufferData(BufferTarget.ArrayBuffer, _vertexCount * 3 * sizeof(float), GenerateNormals(), BufferUsageHint.StaticDraw);
+            GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 3 * sizeof(float), 0);
+            GL.EnableVertexAttribArray(1);
+
+            // Index buffer
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, _indices.Length * sizeof(uint), _indices, BufferUsageHint.StaticDraw);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+            GL.BindVertexArray(0);
+
+            lock (_lock)
+            {
+                if (bufferDebugCount == 0)
+                {
+                    ErrorLogger.SendDebug("Buffers set up successfully.", "Chunk.cs (Terrarium)", "NetworkListener");
+                    bufferDebugCount++;
+                }
+            }
+        }
     }
 
     private float[] GenerateVertices()
     {
         var vertices = new List<float>();
 
-        for (int x = 0; x < _width; x++)  // Changed from x <= _width
+        for (int z = 0; z <= _depth; z++)
         {
-            for (int z = 0; z < _depth; z++)  // Changed from z <= _depth
+            for (int x = 0; x <= _width; x++)
             {
                 vertices.Add(x);
                 vertices.Add(_heightMap[x, z]);
@@ -357,26 +478,43 @@ public class Chunk
         return vertices.ToArray();
     }
 
+    private float[] GenerateNormals()
+    {
+        var normals = new List<float>();
 
-    private uint[] GenerateIndices(int width, int depth)
+        for (int z = 0; z <= _depth; z++)
+        {
+            for (int x = 0; x <= _width; x++)
+            {
+                Vector3 normal = _normalMap[x, z];
+                normals.Add(normal.X);
+                normals.Add(normal.Y);
+                normals.Add(normal.Z);
+            }
+        }
+
+        return normals.ToArray();
+    }
+
+    private uint[] GenerateIndices()
     {
         var indices = new List<uint>();
 
-        for (int x = 0; x < width; x++)
+        for (int z = 0; z < _depth; z++)
         {
-            for (int z = 0; z < depth; z++)
+            for (int x = 0; x < _width; x++)
             {
-                int topLeft = x + z * (width + 1);
-                int topRight = (x + 1) + z * (width + 1);
-                int bottomLeft = x + (z + 1) * (width + 1);
-                int bottomRight = (x + 1) + (z + 1) * (width + 1);
+                uint topLeft = (uint)(x + z * (_width + 1));
+                uint topRight = (uint)((x + 1) + z * (_width + 1));
+                uint bottomLeft = (uint)(x + (z + 1) * (_width + 1));
+                uint bottomRight = (uint)((x + 1) + (z + 1) * (_width + 1));
 
-                indices.Add((uint)topLeft);
-                indices.Add((uint)bottomLeft);
-                indices.Add((uint)topRight);
-                indices.Add((uint)topRight);
-                indices.Add((uint)bottomLeft);
-                indices.Add((uint)bottomRight);
+                indices.Add(topLeft);
+                indices.Add(bottomLeft);
+                indices.Add(topRight);
+                indices.Add(topRight);
+                indices.Add(bottomLeft);
+                indices.Add(bottomRight);
             }
         }
 
@@ -385,75 +523,58 @@ public class Chunk
 
     public void Render()
     {
-        GL.BindVertexArray(_vertexArrayObject);
-        GL.DrawElements(PrimitiveType.Triangles, _indices.Length, DrawElementsType.UnsignedInt, 0);
-        GL.BindVertexArray(0);
-    }
-
-    public void RenderTerrain(int chunkWidth, int chunkDepth, float scale, float heightMultiplier)
-    {
         try
         {
-            // Clear the screen
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            // Set chunk-specific uniforms or transformations here if needed
+            // For example, if each chunk has a different position:
+            // _shader.SetMatrix4("model", Matrix4.CreateTranslation(ChunkPosition));
 
-            // Use shader program
-            if (_shader == null)
+            GL.BindVertexArray(_vertexArrayObject);
+            ErrorLogger.SendDebug("Vertex Array Object bound.", "Chunk.cs (Terrarium)", "NetworkListener");
+
+            GL.DrawElements(PrimitiveType.Triangles, _indices.Length, DrawElementsType.UnsignedInt, 0);
+            ErrorLogger.SendDebug($"DrawElements called with {_indices.Length} indices.", "Chunk.cs (Terrarium)", "NetworkListener");
+
+            GL.BindVertexArray(0);
+            ErrorLogger.SendDebug("Vertex Array Object unbound.", "Chunk.cs (Terrarium)", "NetworkListener");
+
+            lock (_lock)
             {
-                ErrorLogger.SendError("Shader is not initialized.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                throw new InvalidOperationException("Shader is not initialized.");
-            }
-
-
-            // Use shader program
-            _shader.Use();
-            _shader.SetVector3("lightPos", new Vector3(10.0f, 10.0f, 10.0f));
-            _shader.SetVector3("lightColor", new Vector3(1.0f, 1.0f, 1.0f));
-            _shader.SetVector3("objectColor", new Vector3(0.5f, 0.35f, 0.25f));
-
-             if (_camera == null)
-            {
-                ErrorLogger.SendError("Camera is not initialized.", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
-                throw new InvalidOperationException("Camera is not initialized.");
-            }
-
-            // Set camera matrices
-            _shader.SetVector3("viewPos", _camera.Position);
-            _shader.SetMatrix4("view", _camera.View);
-            _shader.SetMatrix4("projection", _camera.Projection);
-
-            foreach (var chunk in _chunks)
-            {
-                if (_chunks == null)
-                {
-                    ErrorLogger.SendError("Chunks list is not initialized.", "TerrainGenerator.cs (Terrarium)", "NetworkListener");
-                    throw new InvalidOperationException("Chunks list is not initialized.");
+                if(renderDebugCount == 0)
+                {   
+                    ErrorLogger.SendDebug("Chunk rendered successfully.", "Chunk.cs (Terrarium)", "NetworkListener");
+                    renderDebugCount++;
                 }
-                chunk.Render();
             }
-            
         }
         catch (Exception ex)
         {
-            ErrorLogger.SendError($"Terrain rendering exception: {ex.Message}", "TerrainGeneration.cs (Terrarium)", "NetworkListener");
+            ErrorLogger.SendError($"Chunk rendering exception: {ex.Message}", "Chunk.cs (Terrarium)", "NetworkListener");
         }
     }
 
-    public void InitializeChunks(int chunkWidth, int chunkDepth, float scale, float heightMultiplier)
+    
+
+    public void RenderWireframe()
     {
-        _chunks.Clear();
-
-        int numChunksX = 3; // Number of chunks in the x direction
-        int numChunksZ = 3; // Number of chunks in the z direction
-
-        for (int x = 0; x < numChunksX; x++)
+        try
         {
-            for (int z = 0; z < numChunksZ; z++)
-            {
-                _chunks.Add(new Chunk(chunkWidth, chunkDepth, scale, heightMultiplier, _camera, _shader));
-            }
+            _shader?.Use();
+            _shader?.SetMatrix4("model", Matrix4.Identity);
+            _shader?.SetMatrix4("view", _camera.GetViewMatrix());
+            _shader?.SetMatrix4("projection", _camera.GetProjectionMatrix());
+
+            GL.BindVertexArray(_vertexArrayObject);
+            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Line);
+            GL.DrawElements(PrimitiveType.Triangles, _indices.Length, DrawElementsType.UnsignedInt, 0);
+            GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
+            GL.BindVertexArray(0);
+
+            ErrorLogger.SendDebug("Chunk wireframe rendered.", "Chunk.cs (Terrarium)", "NetworkListener");
+        }
+        catch (Exception ex)
+        {
+            ErrorLogger.SendError($"Chunk wireframe rendering exception: {ex.Message}", "Chunk.cs (Terrarium)", "NetworkListener");
         }
     }
-
 }
-

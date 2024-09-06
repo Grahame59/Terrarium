@@ -1,46 +1,56 @@
-using System.Net;
+using System;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
-namespace Error 
+namespace Error
 {
     public class ErrorLogger
     {
+        private static readonly BlockingCollection<string> _logQueue = new BlockingCollection<string>();
+        private static readonly Task _loggingTask;
+        private static readonly string _serverAddress = "localhost";
+        private static readonly int _port = 5000;
 
-        public static void SendError(string error, string script, string networkListener)
+        static ErrorLogger()
         {
-             var client = new TcpClient("localhost", 5000);
-    
-            // Format the message with line breaks between each part
-            var message = $"{Environment.NewLine}Error: {error}{Environment.NewLine}Script: {script}{Environment.NewLine}Context: {networkListener}";
-            
-            var data = Encoding.UTF8.GetBytes(message);
-            
-            using (var stream = client.GetStream())
-            {
-                stream.Write(data, 0, data.Length);
-            }
-            
-            client.Close();
+            // Start a background task to process the log queue
+            _loggingTask = Task.Run(ProcessLogQueue);
         }
 
-        public static void SendDebug(string error, string script, string networkListener)
+        private static async Task ProcessLogQueue()
         {
-             var client = new TcpClient("localhost", 5000);
-    
-            // Format the message with line breaks between each part
-            var message = $"{Environment.NewLine}Debug: {error}{Environment.NewLine}Script: {script}{Environment.NewLine}Context: {networkListener}";
-            
-            var data = Encoding.UTF8.GetBytes(message);
-            
-            using (var stream = client.GetStream())
+            foreach (var logMessage in _logQueue.GetConsumingEnumerable())
             {
-                stream.Write(data, 0, data.Length);
+                try
+                {
+                    using (var client = new TcpClient(_serverAddress, _port))
+                    using (var stream = client.GetStream())
+                    {
+                        var data = Encoding.UTF8.GetBytes(logMessage);
+                        await stream.WriteAsync(data, 0, data.Length);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Handle exceptions (e.g., logging to a file)
+                    Console.WriteLine($"Logging failed: {ex.Message}");
+                }
             }
-            
-            client.Close();
         }
 
+        public static void SendError(string error, string script, string context)
+        {
+            var message = $"{Environment.NewLine}Error: {error}{Environment.NewLine}Script: {script}{Environment.NewLine}Context: {context}";
+            _logQueue.Add(message);
+        }
+
+        public static void SendDebug(string error, string script, string context)
+        {
+            var message = $"{Environment.NewLine}Debug: {error}{Environment.NewLine}Script: {script}{Environment.NewLine}Context: {context}";
+            _logQueue.Add(message);
+        }
     }
 }
